@@ -101,9 +101,9 @@ public:
 
     upstream_locality_.set_zone("to_az");
     context_.cluster_manager_.initializeThreadLocalClusters({"fake_cluster"});
-    ON_CALL(*context_.cluster_manager_.conn_pool_.host_, address())
+    ON_CALL(*context_.cluster_manager_.thread_local_cluster_.conn_pool_.host_, address())
         .WillByDefault(Return(host_address_));
-    ON_CALL(*context_.cluster_manager_.conn_pool_.host_, locality())
+    ON_CALL(*context_.cluster_manager_.thread_local_cluster_.conn_pool_.host_, locality())
         .WillByDefault(ReturnRef(upstream_locality_));
     router_->downstream_connection_.local_address_ = host_address_;
     router_->downstream_connection_.remote_address_ =
@@ -130,15 +130,16 @@ public:
     NiceMock<Http::MockRequestEncoder> encoder;
     Http::ResponseDecoder* response_decoder = nullptr;
 
-    EXPECT_CALL(context_.cluster_manager_.conn_pool_, newStream(_, _))
+    EXPECT_CALL(context_.cluster_manager_.thread_local_cluster_.conn_pool_, newStream(_, _))
         .WillOnce(Invoke(
             [&](Http::ResponseDecoder& decoder,
                 Http::ConnectionPool::Callbacks& callbacks) -> Http::ConnectionPool::Cancellable* {
               response_decoder = &decoder;
               EXPECT_CALL(encoder.stream_, connectionLocalAddress())
                   .WillRepeatedly(ReturnRef(upstream_local_address1_));
-              callbacks.onPoolReady(encoder, context_.cluster_manager_.conn_pool_.host_,
-                                    stream_info_, Http::Protocol::Http10);
+              callbacks.onPoolReady(
+                  encoder, context_.cluster_manager_.thread_local_cluster_.conn_pool_.host_,
+                  stream_info_, Http::Protocol::Http10);
               return nullptr;
             }));
     expectResponseTimerCreate();
@@ -154,7 +155,7 @@ public:
         new Http::TestResponseHeaderMapImpl(response_headers_init));
     response_headers->setStatus(response_code);
 
-    EXPECT_CALL(context_.cluster_manager_.conn_pool_.host_->outlier_detector_,
+    EXPECT_CALL(context_.cluster_manager_.thread_local_cluster_.conn_pool_.host_->outlier_detector_,
                 putHttpResponseCode(response_code));
     response_decoder->decodeHeaders(std::move(response_headers), false);
 
@@ -169,15 +170,16 @@ public:
     NiceMock<Http::MockRequestEncoder> encoder1;
     Http::ResponseDecoder* response_decoder = nullptr;
 
-    EXPECT_CALL(context_.cluster_manager_.conn_pool_, newStream(_, _))
+    EXPECT_CALL(context_.cluster_manager_.thread_local_cluster_.conn_pool_, newStream(_, _))
         .WillOnce(Invoke(
             [&](Http::ResponseDecoder& decoder,
                 Http::ConnectionPool::Callbacks& callbacks) -> Http::ConnectionPool::Cancellable* {
               response_decoder = &decoder;
               EXPECT_CALL(encoder1.stream_, connectionLocalAddress())
                   .WillRepeatedly(ReturnRef(upstream_local_address1_));
-              callbacks.onPoolReady(encoder1, context_.cluster_manager_.conn_pool_.host_,
-                                    stream_info_, Http::Protocol::Http10);
+              callbacks.onPoolReady(
+                  encoder1, context_.cluster_manager_.thread_local_cluster_.conn_pool_.host_,
+                  stream_info_, Http::Protocol::Http10);
               return nullptr;
             }));
     expectPerTryTimerCreate();
@@ -191,25 +193,27 @@ public:
     router_->decodeHeaders(headers, true);
 
     router_->retry_state_->expectResetRetry();
-    EXPECT_CALL(context_.cluster_manager_.conn_pool_.host_->outlier_detector_,
+    EXPECT_CALL(context_.cluster_manager_.thread_local_cluster_.conn_pool_.host_->outlier_detector_,
                 putResult(Upstream::Outlier::Result::LocalOriginTimeout, _));
     per_try_timeout_->invokeCallback();
 
     // We expect this reset to kick off a new request.
     NiceMock<Http::MockRequestEncoder> encoder2;
-    EXPECT_CALL(context_.cluster_manager_.conn_pool_, newStream(_, _))
-        .WillOnce(Invoke(
-            [&](Http::ResponseDecoder& decoder,
-                Http::ConnectionPool::Callbacks& callbacks) -> Http::ConnectionPool::Cancellable* {
-              response_decoder = &decoder;
-              EXPECT_CALL(context_.cluster_manager_.conn_pool_.host_->outlier_detector_,
-                          putResult(Upstream::Outlier::Result::LocalOriginConnectSuccess, _));
-              EXPECT_CALL(encoder2.stream_, connectionLocalAddress())
-                  .WillRepeatedly(ReturnRef(upstream_local_address2_));
-              callbacks.onPoolReady(encoder2, context_.cluster_manager_.conn_pool_.host_,
-                                    stream_info_, Http::Protocol::Http10);
-              return nullptr;
-            }));
+    EXPECT_CALL(context_.cluster_manager_.thread_local_cluster_.conn_pool_, newStream(_, _))
+        .WillOnce(Invoke([&](Http::ResponseDecoder& decoder,
+                             Http::ConnectionPool::Callbacks& callbacks)
+                             -> Http::ConnectionPool::Cancellable* {
+          response_decoder = &decoder;
+          EXPECT_CALL(
+              context_.cluster_manager_.thread_local_cluster_.conn_pool_.host_->outlier_detector_,
+              putResult(Upstream::Outlier::Result::LocalOriginConnectSuccess, _));
+          EXPECT_CALL(encoder2.stream_, connectionLocalAddress())
+              .WillRepeatedly(ReturnRef(upstream_local_address2_));
+          callbacks.onPoolReady(encoder2,
+                                context_.cluster_manager_.thread_local_cluster_.conn_pool_.host_,
+                                stream_info_, Http::Protocol::Http10);
+          return nullptr;
+        }));
     expectPerTryTimerCreate();
     router_->retry_state_->callback_();
 
@@ -217,7 +221,7 @@ public:
     EXPECT_CALL(*router_->retry_state_, shouldRetryHeaders(_, _)).WillOnce(Return(RetryStatus::No));
     Http::ResponseHeaderMapPtr response_headers(
         new Http::TestResponseHeaderMapImpl{{":status", "200"}});
-    EXPECT_CALL(context_.cluster_manager_.conn_pool_.host_->outlier_detector_,
+    EXPECT_CALL(context_.cluster_manager_.thread_local_cluster_.conn_pool_.host_->outlier_detector_,
                 putHttpResponseCode(200));
     response_decoder->decodeHeaders(std::move(response_headers), true);
   }

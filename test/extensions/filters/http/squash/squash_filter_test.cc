@@ -155,7 +155,7 @@ TEST(SquashFilterConfigTest, ParsesEnvironmentInComplexTemplate) {
 
 class SquashFilterTest : public testing::Test {
 public:
-  SquashFilterTest() : request_(&cm_.async_client_) {}
+  SquashFilterTest() : request_(&cm_.thread_local_cluster_.async_client_) {}
 
 protected:
   void SetUp() override {}
@@ -180,8 +180,8 @@ protected:
     attachmentTimeout_timer_ =
         new NiceMock<Envoy::Event::MockTimer>(&filter_callbacks_.dispatcher_);
 
-    EXPECT_CALL(cm_, httpAsyncClientForCluster("squash"))
-        .WillRepeatedly(ReturnRef(cm_.async_client_));
+    EXPECT_CALL(cm_.thread_local_cluster_, httpAsyncClient())
+        .WillRepeatedly(ReturnRef(cm_.thread_local_cluster_.async_client_));
 
     expectAsyncClientSend();
 
@@ -209,7 +209,7 @@ protected:
   }
 
   void expectAsyncClientSend() {
-    EXPECT_CALL(cm_.async_client_, send_(_, _, _))
+    EXPECT_CALL(cm_.thread_local_cluster_.async_client_, send_(_, _, _))
         .WillOnce(Invoke(
             [&](Envoy::Http::RequestMessagePtr&, Envoy::Http::AsyncClient::Callbacks& cb,
                 const Http::AsyncClient::RequestOptions&) -> Envoy::Http::AsyncClient::Request* {
@@ -258,9 +258,10 @@ protected:
 TEST_F(SquashFilterTest, DecodeHeaderContinuesOnClientFail) {
   initFilter();
 
-  EXPECT_CALL(cm_, httpAsyncClientForCluster("squash")).WillOnce(ReturnRef(cm_.async_client_));
+  EXPECT_CALL(cm_.thread_local_cluster_, httpAsyncClient())
+      .WillOnce(ReturnRef(cm_.thread_local_cluster_.async_client_));
 
-  EXPECT_CALL(cm_.async_client_, send_(_, _, _))
+  EXPECT_CALL(cm_.thread_local_cluster_.async_client_, send_(_, _, _))
       .WillOnce(Invoke(
           [&](Envoy::Http::RequestMessagePtr&, Envoy::Http::AsyncClient::Callbacks& callbacks,
               const Http::AsyncClient::RequestOptions&) -> Envoy::Http::AsyncClient::Request* {
@@ -297,7 +298,7 @@ TEST_F(SquashFilterTest, DecodeContinuesOnCreateAttachmentFail) {
 
 TEST_F(SquashFilterTest, DoesNothingWithNoHeader) {
   initFilter();
-  EXPECT_CALL(cm_, httpAsyncClientForCluster(_)).Times(0);
+  EXPECT_CALL(cm_.thread_local_cluster_, httpAsyncClient()).Times(0);
 
   Http::TestRequestHeaderMapImpl headers{{":method", "GET"},
                                          {":authority", "www.solo.io"},
@@ -446,7 +447,7 @@ TEST_F(SquashFilterTest, TimerExpiresInline) {
         attachmentTimeout_timer_->invokeCallback();
       }));
 
-  EXPECT_CALL(cm_.async_client_, send_(_, _, _))
+  EXPECT_CALL(cm_.thread_local_cluster_.async_client_, send_(_, _, _))
       .WillOnce(Invoke([&](Envoy::Http::RequestMessagePtr&, Envoy::Http::AsyncClient::Callbacks&,
                            const Http::AsyncClient::RequestOptions&)
                            -> Envoy::Http::AsyncClient::Request* { return &request_; }));

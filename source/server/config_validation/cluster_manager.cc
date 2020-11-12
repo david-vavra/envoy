@@ -30,13 +30,13 @@ ValidationClusterManager::ValidationClusterManager(
     const LocalInfo::LocalInfo& local_info, AccessLog::AccessLogManager& log_manager,
     Event::Dispatcher& main_thread_dispatcher, Server::Admin& admin,
     ProtobufMessage::ValidationContext& validation_context, Api::Api& api,
-    Http::Context& http_context, Grpc::Context& grpc_context, Event::TimeSystem& time_system)
+    Http::Context& http_context, Grpc::Context& grpc_context,
+    Event::TimeSystem& /*time_systemfixfix*/)
     : ClusterManagerImpl(bootstrap, factory, stats, tls, runtime, local_info, log_manager,
                          main_thread_dispatcher, admin, validation_context, api, http_context,
-                         grpc_context),
-      async_client_(api, time_system) {}
+                         grpc_context) {}
 
-Http::ConnectionPool::Instance* ValidationClusterManager::httpConnPoolForCluster(
+/*Http::ConnectionPool::Instance* ValidationClusterManager::httpConnPoolForCluster(
     const std::string&, ResourcePriority, absl::optional<Http::Protocol>, LoadBalancerContext*) {
   return nullptr;
 }
@@ -46,9 +46,9 @@ Host::CreateConnectionData ValidationClusterManager::tcpConnForCluster(const std
   return Host::CreateConnectionData{nullptr, nullptr};
 }
 
-Http::AsyncClient& ValidationClusterManager::httpAsyncClientForCluster(const std::string&) {
+Http::AsyncClient& ValidationClusterManager::httpAsyncClient() {
   return async_client_;
-}
+}fixfix*/
 
 } // namespace Upstream
 } // namespace Envoy

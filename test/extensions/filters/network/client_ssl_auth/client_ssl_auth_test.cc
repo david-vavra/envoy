@@ -57,7 +57,8 @@ test: a
 class ClientSslAuthFilterTest : public testing::Test {
 protected:
   ClientSslAuthFilterTest()
-      : request_(&cm_.async_client_), interval_timer_(new Event::MockTimer(&dispatcher_)),
+      : request_(&cm_.thread_local_cluster_.async_client_),
+        interval_timer_(new Event::MockTimer(&dispatcher_)),
         api_(Api::createApiForTest(stats_store_)),
         ssl_(std::make_shared<Ssl::MockConnectionInfo>()) {}
   ~ClientSslAuthFilterTest() override { tls_.shutdownThread(); }
@@ -95,8 +96,9 @@ ip_white_list:
   }
 
   void setupRequest() {
-    EXPECT_CALL(cm_, httpAsyncClientForCluster("vpn")).WillOnce(ReturnRef(cm_.async_client_));
-    EXPECT_CALL(cm_.async_client_, send_(_, _, _))
+    EXPECT_CALL(cm_.thread_local_cluster_, httpAsyncClient())
+        .WillOnce(ReturnRef(cm_.thread_local_cluster_.async_client_));
+    EXPECT_CALL(cm_.thread_local_cluster_.async_client_, send_(_, _, _))
         .WillOnce(
             Invoke([this](Http::RequestMessagePtr&, Http::AsyncClient::Callbacks& callbacks,
                           const Http::AsyncClient::RequestOptions&) -> Http::AsyncClient::Request* {
@@ -250,8 +252,9 @@ TEST_F(ClientSslAuthFilterTest, Ssl) {
   callbacks_->onFailure(request_, Http::AsyncClient::FailureReason::Reset);
 
   // Interval timer fires, cannot obtain async client.
-  EXPECT_CALL(cm_, httpAsyncClientForCluster("vpn")).WillOnce(ReturnRef(cm_.async_client_));
-  EXPECT_CALL(cm_.async_client_, send_(_, _, _))
+  EXPECT_CALL(cm_.thread_local_cluster_, httpAsyncClient())
+      .WillOnce(ReturnRef(cm_.thread_local_cluster_.async_client_));
+  EXPECT_CALL(cm_.thread_local_cluster_.async_client_, send_(_, _, _))
       .WillOnce(
           Invoke([&](Http::RequestMessagePtr&, Http::AsyncClient::Callbacks& callbacks,
                      const Http::AsyncClient::RequestOptions&) -> Http::AsyncClient::Request* {

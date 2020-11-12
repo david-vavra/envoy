@@ -302,12 +302,12 @@ public:
     http_conn_pool_ = Http::Http2::allocateConnPool(*dispatcher_, random_, host_ptr_,
                                                     Upstream::ResourcePriority::Default, nullptr,
                                                     nullptr, state_);
-    EXPECT_CALL(cm_, httpConnPoolForCluster(_, _, _, _))
+    EXPECT_CALL(cm_.thread_local_cluster_, httpConnPool(_, _, _))
         .WillRepeatedly(Return(http_conn_pool_.get()));
     http_async_client_ = std::make_unique<Http::AsyncClientImpl>(
         cluster_info_ptr_, *stats_store_, *dispatcher_, local_info_, cm_, runtime_, random_,
         std::move(shadow_writer_ptr_), http_context_);
-    EXPECT_CALL(cm_, httpAsyncClientForCluster(fake_cluster_name_))
+    EXPECT_CALL(cm_.thread_local_cluster_, httpAsyncClient())
         .WillRepeatedly(ReturnRef(*http_async_client_));
     EXPECT_CALL(cm_, getThreadLocalCluster(Eq(fake_cluster_name_)))
         .WillRepeatedly(Return(&thread_local_cluster_));

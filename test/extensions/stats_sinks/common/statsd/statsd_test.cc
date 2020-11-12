@@ -49,8 +49,7 @@ public:
     conn_info.host_description_ = Upstream::makeTestHost(
         std::make_unique<NiceMock<Upstream::MockClusterInfo>>(), "tcp://127.0.0.1:80", simTime());
 
-    EXPECT_CALL(cluster_manager_, tcpConnForCluster_("fake_cluster", _))
-        .WillOnce(Return(conn_info));
+    EXPECT_CALL(cluster_manager_.thread_local_cluster_, tcpConn_(_)).WillOnce(Return(conn_info));
     EXPECT_CALL(*connection_, setConnectionStats(_));
     EXPECT_CALL(*connection_, connect());
   }
@@ -153,7 +152,7 @@ TEST_F(TcpStatsdSinkTest, NoHost) {
   snapshot_.counters_.push_back({1, counter});
 
   Upstream::MockHost::MockCreateConnectionData conn_info;
-  EXPECT_CALL(cluster_manager_, tcpConnForCluster_("fake_cluster", _))
+  EXPECT_CALL(cluster_manager_.thread_local_cluster_, tcpConn_(_))
       .WillOnce(Return(conn_info))
       .WillOnce(Return(conn_info));
   sink_->flush(snapshot_);
